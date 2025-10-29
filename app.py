@@ -33,6 +33,8 @@ def add_expense():
     return render_template('add_expense.html')
 
 
+from datetime import datetime
+
 @app.route('/update/<int:id>', methods=['GET', 'POST'])
 def update_expense(id):
     expense = Expense.query.get_or_404(id)
@@ -41,9 +43,9 @@ def update_expense(id):
         expense.amount = float(request.form['amount'])
         expense.category = request.form['category']
         db.session.commit()
-        flash("Expense updated successfully!", "info")
         return redirect(url_for('index'))
-    return render_template('update_expense.html', expense=expense)
+    return render_template('update_expense.html', expense=expense, datetime=datetime)
+
 
 @app.route('/delete/<int:id>')
 def delete_expense(id):
@@ -53,26 +55,39 @@ def delete_expense(id):
     flash("Expense deleted successfully!", "danger")
     return redirect(url_for('index'))
 
+from datetime import datetime
+
 @app.route('/summary')
 def summary():
-    current_year = datetime.now().year
     month = request.args.get('month')
     query = Expense.query
-    if month:
+
+    if month and month != "":
         query = query.filter(db.extract('month', Expense.date) == int(month))
-    expenses = query.all()
+
+    expenses = query.order_by(Expense.date.desc()).all()
     total = sum(e.amount for e in expenses)
-    categories = {}
-    for e in expenses:
-        categories[e.category] = categories.get(e.category, 0) + e.amount
 
     warning = None
     MONTHLY_BUDGET = 1000
     if total > MONTHLY_BUDGET:
-        warning = f"⚠️ Budget exceeded by ${total - MONTHLY_BUDGET:.2f}"
+        warning = f"Budget exceeded by ${total - MONTHLY_BUDGET:.2f}"
 
-    return render_template('summary.html', expenses=expenses, total=total, categories=categories, warning=warning)
+    months = [
+        ("1", "January"), ("2", "February"), ("3", "March"), ("4", "April"),
+        ("5", "May"), ("6", "June"), ("7", "July"), ("8", "August"),
+        ("9", "September"), ("10", "October"), ("11", "November"), ("12", "December")
+    ]
 
+    return render_template(
+        'summary.html',
+        expenses=expenses,
+        total=total,
+        warning=warning,
+        months=months,
+        selected_month=month,
+        datetime=datetime
+    )
 @app.route('/export')
 def export_csv():
     expenses = Expense.query.all()
@@ -87,10 +102,11 @@ def export_csv():
     return send_file('expenses.csv', as_attachment=True)
 
 
-from flask import Flask, render_template
-...
+from datetime import datetime
+
 @app.route('/')
 def index():
     expenses = Expense.query.all()
     total = sum(e.amount for e in expenses)
-    return render_template('index.html', expenses=expenses, total=total)
+    return render_template('index.html', expenses=expenses, total=total, datetime=datetime)
+
