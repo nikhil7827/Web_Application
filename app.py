@@ -106,7 +106,43 @@ from datetime import datetime
 
 @app.route('/')
 def index():
-    expenses = Expense.query.all()
-    total = sum(e.amount for e in expenses)
-    return render_template('index.html', expenses=expenses, total=total, datetime=datetime)
+    expenses = Expense.query.order_by(Expense.date.desc()).all()
+
+    total_income = sum(e.amount for e in expenses if e.category.lower() == 'income')
+    total_expenses = sum(e.amount for e in expenses if e.category.lower() != 'income')
+    balance = total_income - total_expenses
+
+    # Expense breakdown by category
+    categories = {}
+    for e in expenses:
+        if e.category.lower() != 'income':
+            categories[e.category] = categories.get(e.category, 0) + e.amount
+
+    return render_template(
+        'index.html',
+        expenses=expenses,
+        total_income=total_income,
+        total_expenses=total_expenses,
+        balance=balance,
+        categories=categories,
+        chart_labels=list(categories.keys()),
+        chart_values=list(categories.values())
+    )
+
+@app.route('/add_income', methods=['GET', 'POST'])
+def add_income():
+    if request.method == 'POST':
+        description = request.form['description']
+        amount = float(request.form['amount'])
+
+        # Treat paycheck as category "Income"
+        new_income = Expense(description=description, amount=amount, category='Income', date=datetime.utcnow())
+
+        db.session.add(new_income)
+        db.session.commit()
+
+        flash('Income added successfully!', 'success')
+        return redirect(url_for('index'))
+
+    return render_template('add_income.html')
 
