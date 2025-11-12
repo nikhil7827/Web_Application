@@ -2,6 +2,7 @@ from flask import Flask, render_template, request, redirect, url_for, flash, sen
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 import pandas as pd
+from flask import jsonify, request
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:root@localhost/expensesdb'
@@ -19,74 +20,74 @@ with app.app_context():
     db.create_all()
 
 
-@app.route('/add', methods=['GET', 'POST'])
+@app.route('/add_expense', methods=['POST'])
 def add_expense():
-    if request.method == 'POST':
-        desc = request.form['description']
-        amount = float(request.form['amount'])
-        category = request.form['category']
-        new_expense = Expense(description=desc, amount=amount, category=category)
-        db.session.add(new_expense)
-        db.session.commit()
-        flash("Expense added successfully!", "success")
-        return redirect(url_for('index'))
-    return render_template('add_expense.html')
-
+    description = request.form['description']
+    amount = float(request.form['amount'])
+    category = request.form['category']
+    new_expense = Expense(description=description, amount=amount, category=category, date=datetime.utcnow())
+    db.session.add(new_expense)
+    db.session.commit()
+    flash('Expense added successfully!', 'success')
+    return redirect(url_for('index'))
 
 from datetime import datetime
 
-@app.route('/update/<int:id>', methods=['GET', 'POST'])
+
+@app.route('/update_expense/<int:id>', methods=['POST'])
 def update_expense(id):
     expense = Expense.query.get_or_404(id)
-    if request.method == 'POST':
-        expense.description = request.form['description']
-        expense.amount = float(request.form['amount'])
-        expense.category = request.form['category']
-        db.session.commit()
-        return redirect(url_for('index'))
-    return render_template('update_expense.html', expense=expense, datetime=datetime)
+    expense.description = request.form['description']
+    expense.amount = float(request.form['amount'])
+    expense.category = request.form['category']
+    db.session.commit()
 
+    return jsonify({
+        'success': True,
+        'id': expense.id,
+        'description': expense.description,
+        'amount': f"{expense.amount:.2f}",
+        'category': expense.category
+    })
 
-@app.route('/delete/<int:id>')
+@app.route('/delete_expense/<int:id>', methods=['DELETE'])
 def delete_expense(id):
     expense = Expense.query.get_or_404(id)
     db.session.delete(expense)
     db.session.commit()
-    flash("Expense deleted successfully!", "danger")
-    return redirect(url_for('index'))
+    return jsonify({'success': True, 'id': id})
 
 from datetime import datetime
 
 @app.route('/summary')
 def summary():
-    month = request.args.get('month')
-    query = Expense.query
+    # Fetch all expenses from the database
+    expenses = Expense.query.order_by(Expense.date.desc()).all()
 
-    if month and month != "":
-        query = query.filter(db.extract('month', Expense.date) == int(month))
+    # Calculate totals
+    total_income = sum(e.amount for e in expenses if e.category.lower() == 'income')
+    total_expenses = sum(e.amount for e in expenses if e.category.lower() != 'income')
+    balance = total_income - total_expenses
 
-    expenses = query.order_by(Expense.date.desc()).all()
-    total = sum(e.amount for e in expenses)
+    # Group expenses by category (excluding income)
+    categories = {}
+    for e in expenses:
+        if e.category.lower() != 'income':
+            categories[e.category] = categories.get(e.category, 0) + e.amount
 
-    warning = None
-    MONTHLY_BUDGET = 1000
-    if total > MONTHLY_BUDGET:
-        warning = f"Budget exceeded by ${total - MONTHLY_BUDGET:.2f}"
-
-    months = [
-        ("1", "January"), ("2", "February"), ("3", "March"), ("4", "April"),
-        ("5", "May"), ("6", "June"), ("7", "July"), ("8", "August"),
-        ("9", "September"), ("10", "October"), ("11", "November"), ("12", "December")
-    ]
+    # Prepare chart data
+    chart_labels = list(categories.keys())
+    chart_values = list(categories.values())
 
     return render_template(
         'summary.html',
         expenses=expenses,
-        total=total,
-        warning=warning,
-        months=months,
-        selected_month=month,
-        datetime=datetime
+        total_income=total_income,
+        total_expenses=total_expenses,
+        balance=balance,
+        categories=categories,
+        chart_labels=chart_labels,
+        chart_values=chart_values
     )
 @app.route('/export')
 def export_csv():
@@ -129,20 +130,13 @@ def index():
         chart_values=list(categories.values())
     )
 
-@app.route('/add_income', methods=['GET', 'POST'])
+@app.route('/add_income', methods=['POST'])
 def add_income():
-    if request.method == 'POST':
-        description = request.form['description']
-        amount = float(request.form['amount'])
-
-        # Treat paycheck as category "Income"
-        new_income = Expense(description=description, amount=amount, category='Income', date=datetime.utcnow())
-
-        db.session.add(new_income)
-        db.session.commit()
-
-        flash('Income added successfully!', 'success')
-        return redirect(url_for('index'))
-
-    return render_template('add_income.html')
+    description = request.form['description']
+    amount = float(request.form['amount'])
+    new_income = Expense(description=description, amount=amount, category='Income', date=datetime.utcnow())
+    db.session.add(new_income)
+    db.session.commit()
+    flash('Income added successfully!', 'success')
+    return redirect(url_for('index'))
 
