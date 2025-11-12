@@ -3,11 +3,14 @@ from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 import pandas as pd
 from flask import jsonify, request
+from flasgger import Swagger
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:root@localhost/expensesdb'
 app.config['SECRET_KEY'] = 'secret123'
 db = SQLAlchemy(app)
+
+swagger = Swagger(app, template_file='static/openapi.yaml')
 
 class Expense(db.Model):
     id = db.Column(db.Integer, primary_key=True)

@@ -1,0 +1,39 @@
+swagger: "2.0"
+info:
+  title: Expense Tracker API
+  version: 1.0.0
+paths:
+  /api/expenses:
+    get:
+      summary: Get all expenses
+      responses:
+        '200':
+          description: Returns all expenses
+    post:
+      summary: Add a new expense
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExpenseInput'
+      responses:
+        '201':
+          description: Expense added successfully
+components:
+  schemas:
+    Expense:
+      type: object
+      properties:
+        id: { type: string }
+        category: { type: string }
+        amount: { type: number }
+        date: { type: string, format: date }
+        notes: { type: string }
+    ExpenseInput:
+      type: object
+      properties:
+        category: { type: string }
+        amount: { type: number }
+        date: { type: string, format: date }
+        notes: { type: string }
